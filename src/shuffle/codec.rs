@@ -20,14 +20,13 @@ use crate::protobuf::{RayShuffleReaderExecNode, RayShuffleWriterExecNode, RaySql
 use crate::shuffle::{RayShuffleReaderExec, RayShuffleWriterExec};
 use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::common::{DataFusionError, Result};
-use datafusion::execution::runtime_env::RuntimeEnv;
 use datafusion::execution::FunctionRegistry;
 use datafusion::physical_plan::{ExecutionPlan, Partitioning};
 use datafusion_proto::physical_plan::from_proto::parse_protobuf_hash_partitioning;
 use datafusion_proto::physical_plan::to_proto::serialize_physical_expr;
+use datafusion_proto::physical_plan::DefaultPhysicalExtensionCodec;
 use datafusion_proto::physical_plan::PhysicalExtensionCodec;
-use datafusion_proto::physical_plan::{AsExecutionPlan, DefaultPhysicalExtensionCodec};
-use datafusion_proto::protobuf::{self, PhysicalHashRepartition, PhysicalPlanNode};
+use datafusion_proto::protobuf::{self, PhysicalHashRepartition};
 use prost::Message;
 use std::sync::Arc;
 
@@ -38,48 +37,60 @@ impl PhysicalExtensionCodec for ShuffleCodec {
     fn try_decode(
         &self,
         buf: &[u8],
-        _inputs: &[Arc<dyn ExecutionPlan>],
+        inputs: &[Arc<dyn ExecutionPlan>],
         registry: &dyn FunctionRegistry,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
         // decode bytes to protobuf struct
         let node = RaySqlExecNode::decode(buf)
             .map_err(|e| DataFusionError::Internal(format!("failed to decode plan: {e:?}")))?;
         let extension_codec = DefaultPhysicalExtensionCodec {};
-        match node.plan_type {
-            Some(PlanType::RayShuffleReader(reader)) => {
-                let schema = reader.schema.as_ref().unwrap();
-                let schema: SchemaRef = Arc::new(schema.try_into().unwrap());
-                let hash_part = parse_protobuf_hash_partitioning(
-                    reader.partitioning.as_ref(),
-                    registry,
-                    &schema,
-                    &extension_codec,
-                )?;
-                Ok(Arc::new(RayShuffleReaderExec::new(
-                    reader.stage_id as usize,
-                    schema,
-                    hash_part.unwrap(),
-                )))
+        if let Some(plan_type) = node.plan_type {
+            match plan_type {
+                PlanType::RayShuffleReader(reader) => {
+                    let schema = reader.schema.as_ref().ok_or_else(|| {
+                        DataFusionError::Execution("invalid encoded schema".into())
+                    })?;
+                    let schema: SchemaRef = Arc::new(schema.try_into()?);
+                    let hash_part = parse_protobuf_hash_partitioning(
+                        reader.partitioning.as_ref(),
+                        registry,
+                        &schema,
+                        &extension_codec,
+                    )?
+                    .ok_or_else(|| {
+                        DataFusionError::Execution("missing partitioning info".into())
+                    })?;
+                    Ok(Arc::new(RayShuffleReaderExec::new(
+                        reader.stage_id as usize,
+                        schema,
+                        hash_part,
+                    )))
+                }
+                PlanType::RayShuffleWriter(writer) => {
+                    let plan = inputs
+                        .first()
+                        .ok_or_else(|| {
+                            DataFusionError::Execution("No inputs for shuffle writer".into())
+                        })?
+                        .to_owned();
+                    let hash_part = parse_protobuf_hash_partitioning(
+                        writer.partitioning.as_ref(),
+                        registry,
+                        plan.schema().as_ref(),
+                        &extension_codec,
+                    )?
+                    .ok_or_else(|| {
+                        DataFusionError::Execution("missing partitioning info".into())
+                    })?;
+                    Ok(Arc::new(RayShuffleWriterExec::new(
+                        writer.stage_id as usize,
+                        plan,
+                        hash_part,
+                    )))
+                }
             }
-            Some(PlanType::RayShuffleWriter(writer)) => {
-                let plan = writer.plan.unwrap().try_into_physical_plan(
-                    registry,
-                    &RuntimeEnv::default(),
-                    self,
-                )?;
-                let hash_part = parse_protobuf_hash_partitioning(
-                    writer.partitioning.as_ref(),
-                    registry,
-                    plan.schema().as_ref(),
-                    &extension_codec,
-                )?;
-                Ok(Arc::new(RayShuffleWriterExec::new(
-                    writer.stage_id as usize,
-                    plan,
-                    hash_part.unwrap(),
-                )))
-            }
-            _ => unreachable!(),
+        } else {
+            Err(DataFusionError::Execution("missing plan_type".into()))
         }
     }
 
@@ -88,7 +99,7 @@ impl PhysicalExtensionCodec for ShuffleCodec {
         node: Arc<dyn ExecutionPlan>,
         buf: &mut Vec<u8>,
     ) -> Result<(), DataFusionError> {
-        let plan = if let Some(reader) = node.as_any().downcast_ref::<RayShuffleReaderExec>() {
+        if let Some(reader) = node.as_any().downcast_ref::<RayShuffleReaderExec>() {
             let schema: protobuf::Schema = reader.schema().try_into().unwrap();
             let partitioning =
                 encode_partitioning_scheme(reader.properties().output_partitioning())?;
@@ -97,22 +108,22 @@ impl PhysicalExtensionCodec for ShuffleCodec {
                 schema: Some(schema),
                 partitioning: Some(partitioning),
             };
-            PlanType::RayShuffleReader(reader)
+            Ok(PlanType::RayShuffleReader(reader).encode(buf))
         } else if let Some(writer) = node.as_any().downcast_ref::<RayShuffleWriterExec>() {
-            let plan = PhysicalPlanNode::try_from_physical_plan(writer.plan.clone(), self)?;
             let partitioning =
                 encode_partitioning_scheme(writer.properties().output_partitioning())?;
             let writer = RayShuffleWriterExecNode {
                 stage_id: writer.stage_id as u32,
-                plan: Some(plan),
+                plan: None,
                 partitioning: Some(partitioning),
             };
-            PlanType::RayShuffleWriter(writer)
+            Ok(PlanType::RayShuffleWriter(writer).encode(buf))
         } else {
-            unreachable!()
-        };
-        plan.encode(buf);
-        Ok(())
+            Err(DataFusionError::Execution(format!(
+                "Unsupported plan node: {}",
+                node.name()
+            )))
+        }
     }
 }
 
