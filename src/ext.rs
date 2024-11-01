@@ -17,6 +17,10 @@ mod built_in;
 #[path = "ext/flight-tables.rs"]
 mod flight_tables;
 
+#[cfg(feature = "delta-tables")]
+#[path = "ext/delta-tables.rs"]
+mod delta_tables;
+
 #[async_trait]
 pub(crate) trait Extension: Debug + Send + Sync + 'static {
     async fn init(&self, ctx: &SessionContext, settings: &HashMap<String, String>) -> Result<()> {
@@ -52,6 +56,8 @@ impl Default for Extensions {
             Box::new(built_in::DefaultExtension::default()),
             #[cfg(feature = "flight-tables")]
             Box::new(flight_tables::FlightTables::default()),
+            #[cfg(feature = "delta-tables")]
+            Box::new(delta_tables::DeltaTables::default()),
         ]))
     }
 }

@@ -40,6 +40,7 @@ tokio = { version = "1.40", features = ["macros", "rt", "rt-multi-thread", "sync
 lazy_static = "1.5.0"
 async-trait = "0.1.83"
 datafusion-table-providers = { version = "0.2.3", default-features = false, optional = true }
+deltalake = {  version = "0.21.0", features = ["datafusion", "datafusion-ext"], optional = true }
 
 [build-dependencies]
 prost-types = "0.13"
@@ -64,3 +65,36 @@ lto = true
 
 [features]
 flight-tables = ["datafusion-table-providers/flight"]
+delta-tables = ["dep:deltalake"]
+
+[patch.crates-io]
+datafusion = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-cli = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-catalog = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-common = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-common-runtime = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-execution = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-expr = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-expr-common = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-functions = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-functions-aggregate = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-functions-aggregate-common = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-functions-nested = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-functions-window = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-optimizer = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-physical-expr = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-physical-expr-common = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-physical-optimizer = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-physical-plan = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-proto = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-proto-common = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-sql = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-substrait = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
+datafusion-python = {git = 'https://github.com/hstack/datafusion-python.git', branch='main'}
+deltalake = { git = 'https://github.com/hstack/delta-rs.git', branch = 'main' }
+deltalake-catalog-glue = { git = 'https://github.com/hstack/delta-rs.git', branch = 'main' }
+deltalake-core = { git = 'https://github.com/hstack/delta-rs.git', branch = 'main' }
+deltalake-aws = { git = 'https://github.com/hstack/delta-rs.git', branch = 'main' }
+deltalake-azure = { git = 'https://github.com/hstack/delta-rs.git', branch = 'main' }
+deltalake-mount = { git = 'https://github.com/hstack/delta-rs.git', branch = 'main' }
+deltalake-sql = { git = 'https://github.com/hstack/delta-rs.git', branch = 'main' }
