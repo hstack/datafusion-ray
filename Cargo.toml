@@ -41,6 +41,8 @@ lazy_static = "1.5.0"
 async-trait = "0.1.83"
 datafusion-table-providers = { version = "0.2.3", default-features = false, optional = true }
 deltalake = {  version = "0.21.0", features = ["datafusion", "datafusion-ext"], optional = true }
+aep-delta = { version = "0.2", git = 'ssh://git@git.corp.adobe.com/arrow/aep-rs.git', branch = "main", optional = true }
+cobweb = { git = 'ssh://git@git.corp.adobe.com/arrow/cobweb.git', branch = 'main', optional = true }
 
 [build-dependencies]
 prost-types = "0.13"
@@ -66,6 +68,7 @@ lto = true
 [features]
 flight-tables = ["datafusion-table-providers/flight"]
 delta-tables = ["dep:deltalake"]
+adobe = ["flight-tables", "delta-tables", "dep:aep-delta", "dep:cobweb"]
 
 [patch.crates-io]
 datafusion = { git = 'https://github.com/hstack/arrow-datafusion.git', branch = 'main' }
