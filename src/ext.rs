@@ -13,6 +13,10 @@ use std::sync::Arc;
 #[path = "ext/built-in.rs"]
 mod built_in;
 
+#[cfg(feature = "flight-tables")]
+#[path = "ext/flight-tables.rs"]
+mod flight_tables;
+
 #[async_trait]
 pub(crate) trait Extension: Debug + Send + Sync + 'static {
     async fn init(&self, ctx: &SessionContext, settings: &HashMap<String, String>) -> Result<()> {
@@ -46,6 +50,8 @@ impl Default for Extensions {
     fn default() -> Self {
         Self(Box::new([
             Box::new(built_in::DefaultExtension::default()),
+            #[cfg(feature = "flight-tables")]
+            Box::new(flight_tables::FlightTables::default()),
         ]))
     }
 }
