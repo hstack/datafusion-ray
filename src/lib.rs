@@ -17,13 +17,19 @@
 
 extern crate core;
 
+use crate::ext::Extensions;
+use datafusion::prelude::SessionContext;
+use datafusion_python::context::PySessionContext;
+use datafusion_python::utils::wait_for_future;
 use pyo3::prelude::*;
+use std::collections::HashMap;
 
 mod proto;
 use crate::context::execute_partition;
 pub use proto::generated::protobuf;
 
 pub mod context;
+pub mod ext;
 pub mod planner;
 pub mod query_stage;
 pub mod shuffle;
@@ -36,5 +42,16 @@ fn _datafusion_ray_internal(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<planner::PyExecutionGraph>()?;
     m.add_class::<query_stage::PyQueryStage>()?;
     m.add_function(wrap_pyfunction!(execute_partition, m)?)?;
+    m.add_function(wrap_pyfunction!(session_context, m)?)?;
     Ok(())
+}
+
+#[pyfunction]
+pub fn session_context(
+    settings: HashMap<String, String>,
+    py: Python,
+) -> PyResult<PySessionContext> {
+    let ctx = SessionContext::new();
+    let _ = wait_for_future(py, Extensions::setup(&ctx, &settings))?;
+    Ok(ctx.into())
 }
